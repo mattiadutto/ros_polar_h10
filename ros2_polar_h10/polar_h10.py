@@ -8,13 +8,14 @@ import pexpect
 class PolarH10Reader(Node):
     def _set_up_params(self):
         # MAC ADDRESS
-        self.mac_address = self.get_parameter_or(
+        self.declare_parameter('mac_address', '00:00:00:00:00:00')
+        self.mac_address = self.get_parameter(
                 "mac_address",
-                Parameter("", value="E2:74:8D:5C:73:8A"), # "EB:0B:03:5B:34:34"),
             ).get_parameter_value().string_value
         
         # HRV TOPIC
-        # STATUS TOPIC
+        self.declare_parameter("topic_hrv", "/polar_h10/hrv")
+        self.topic_hrv = self.get_parameter("topic_hrv").get_parameter_value().string_value
         
     def __init__(self):
         self.package_name = "ros2_polar_h10"
@@ -26,16 +27,10 @@ class PolarH10Reader(Node):
         self.sensor_status = 0
         
         self.publisher = self.create_publisher(
-            Int32MultiArray, "/polar_h10/hrv", 10
-        )   
-        
-        self.subscriber = self.create_subscription(Bool, "/polar_h10/status", self._state_callback, 10) # Tu a che servi?!?!!?
+            Int32MultiArray, self.topic_hrv, 10
+        )  
         
         self._read_data()
-        
-        
-    def _state_callback(self, msg):
-        self.sensor_status = msg.data
 
     def _read_data(self):
         # SENSOR CONNECITON
@@ -43,7 +38,6 @@ class PolarH10Reader(Node):
         
         while sensor_connection:
             gatt = pexpect.spawn("gatttool -t random -b " + self.mac_address + " --char-write-req --handle=0x0011 --value=0100 --listen") # gatttool is deprecated. 
-            # print(gatt.readline())
             if gatt.readline() == b"Characteristic value was written successfully\r\n":
                 line = gatt.readline()
                 data = line.split(b" ")
@@ -66,13 +60,7 @@ class PolarH10Reader(Node):
                 hrv = int(data[6], 16)
                 ibi = int(data[7], 16)
                 battery = int(data[8], 16)
-                
-                # print(f"{hrv} \t {ibi} \t {battery} \t {self.sensor_status}")
-                # print(data)
-                
-                # if self.sensor_status == True: # TODO tu a che servi? 
-                #    self.publisher.publish([hrv, ibi, battery])
-                
+    
                 self.publisher.publish(Int32MultiArray(data=[hrv, ibi, battery]))
                     
 def main(args=None):
